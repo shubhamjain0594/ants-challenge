@@ -3,13 +3,17 @@ import os
 import scipy.ndimage
 import numpy as np
 import csv,sys
+from generate_barcode import get_barcode
+
 
 DATA_PATH = '/data4/ants-challenge'
 train_valid_split = 0.8
 
-files = glob.glob(os.path.join(DATA_PATH,'fnames/*.jpeg'))
-train_images = files[:int(train_valid_split*len(files))]
-valid_images = files[int(train_valid_split*len(files)):]
+ant_id_list = [101, 106, 109, 119, 128, 133, 135, 143, 15, 161, 166,
+            174, 175, 18, 194, 195, 199, 1, 202, 262, 265, 267, 269, 291, 295,
+            298, 324, 331, 334, 33, 353, 36, 397, 428, 429, 42, 43, 448, 46, 494,
+            532, 533, 538, 539, 561, 570, 571, 594, 598, 600, 630, 633, 637, 646, 657,
+            671, 67, 698, 699, 727, 72, 756, 758, 763, 764, 76, 77, 790, 797, 818, 819]
 
 def load_csv(file_name):
     """
@@ -40,7 +44,12 @@ def load_csv(file_name):
         return ant_dict
 
 
-
+def get_padded_barcode(ant_id,xs,ys):
+    barcode = get_barcode(ant_id)
+    img = np.zeros((xs,ys))
+    s1,s2 = barcode.shape
+    img[(xs-s1)/2:(xs+s1)/2,(ys-s2)/2:(ys+s2)/2] = barcode
+    return img
 
 def data_generator(mode,ant_id,batch_size=2,xs =288,ys=512,s1=270,s2=480):
     ant_dict = load_csv(os.path.join(DATA_PATH,'training_dataset.csv'))
@@ -48,6 +57,8 @@ def data_generator(mode,ant_id,batch_size=2,xs =288,ys=512,s1=270,s2=480):
 
     frames = spc_ant_dict['frames']
     frames = [DATA_PATH+'/frames/'+x+'.jpeg' for x in frames]
+
+    padded_barcode = get_padded_barcode(ant_id,xs,ys)
 
     if mode=='train':
         images = frames[:int(len(frames)*train_valid_split)]
@@ -72,6 +83,7 @@ def data_generator(mode,ant_id,batch_size=2,xs =288,ys=512,s1=270,s2=480):
                         crop_img = img[i:i+xs:,-ys:,:]
                     else:
                         crop_img = img[-xs:,-ys:,:]
+
                     if i <= coord[1] < i+xs and j <= coord[0] <j+ys:
                         y1 = np.asarray([0,1])
                         y2 = np.asarray([coord[0], coord[1]])
@@ -82,6 +94,91 @@ def data_generator(mode,ant_id,batch_size=2,xs =288,ys=512,s1=270,s2=480):
                         y2 = np.asarray([0, 0])
                         y1 = y1.reshape((1,2))
                         y2 = y2.reshape((1,2))
+
+                    crop_img = crop_img.reshape((1,xs,ys,3))
+                    crop_img = np.concatenate((crop_img,padded_barcode),axis = 3)
+
+                    if X is None:
+                        X = crop_img
+                        Y1 = y1
+                        Y2 = y2
+                    else:
+                        X = np.concatenate((X,crop_img),axis =0)
+                        Y1 = np.concatenate((Y1,y1),axis =0)
+                        Y2 = np.concatenate((Y2,y2),axis =0)
+        yield X,Y1,Y2
+
+
+def framewise_load_csv(file_name):
+    """
+    Reads CSV at file_name as list of lists for each line.
+    """
+    if sys.version_info[0] < 3:
+        lines = []
+        infile = open(file_name, 'rb')
+    else:
+        lines = []
+        infile = open(file_name, 'r', newline='')
+
+    frame_dict = {}
+    with infile as f:
+        csvreader = csv.reader(f)
+        for c,lines in enumerate(csvreader):
+            if c==0:
+                continue
+            frame_id = '{:05d}'.format(int(lines[1]))
+            if frame_id not in frame_dict:
+                frame_dict[frame_id] = {}
+                frame_dict[frame_id]['ant_id'] = []
+                frame_dict[frame_id]['coordinates'] = []
+            if lines[-1]:
+                frame_dict[frame_id]['ant_id'].append(int(lines[0]))
+                frame_dict[frame_id]['coordinates'].append([lines[2], lines[3]])
+
+        return frame_dict
+
+
+
+
+def framewise_data_generator(mode,batch_size=2,xs =288,ys=512,s1=270,s2=480):
+    frame_dict = framewise_load_csv(os.path.join(DATA_PATH,'training_dataset.csv'))
+    frames_list = frame_dict.keys()
+
+    if mode=='train':
+        images = frames_list[:int(len(frames_list)*train_valid_split)]
+    elif mode == 'valid':
+        images = frames_list[int(len(frames_list)*train_valid_split):]
+
+    image_list = [DATA_PATH+'/frames/'+x+'.jpeg' for x in images]
+
+
+    for index in range(len(image_list)):
+        X = None
+        Y1 = None
+        Y2 = None
+        for file_index,files in enumerate(image_list[index:index+batch_size]):
+            img = scipy.ndimage.imread(files)
+            frame_id = images[index + file_index]
+            print (frame_dict[frame_id]['ant_id'])
+            print (len(frame_dict[frame_id]['coordinates']))
+            for i in range(0,img.shape[0],s1):
+                for j in range(0,img.shape[1],s2):
+                    if i+xs <= img.shape[0] and j+ys <= img.shape[1]:
+                        crop_img = img[i:i+xs,j:j+ys,:]
+                    elif i+xs > img.shape[0] and j+ys <= img.shape[1]:
+                        crop_img = img[-xs:,j:j+ys,:]
+                    elif j+ys > img.shape[0]and i+xs <= img.shape[0]:
+                        crop_img = img[i:i+xs:,-ys:,:]
+                    else:
+                        crop_img = img[-xs:,-ys:,:]
+                    y1 = np.zeros((1,72))
+                    y2 = np.zeros((1,144))
+                    for c,coord in enumerate(frame_dict[frame_id]['coordinates']):
+                        if i <= float(coord[1]) < i+xs and j <= float(coord[0]) <j+ys:
+                            ant_id = frame_dict[frame_id]['ant_id'][c]
+                            cls_no = ant_id_list.index(ant_id) + 1
+                            y1[0][cls_no] = 1
+                            y2[0][cls_no:cls_no+2] = np.asarray([float(coord[0]), float(coord[1])])
 
                     crop_img = crop_img.reshape((1,xs,ys,3))
 
@@ -100,13 +197,11 @@ def data_generator(mode,ant_id,batch_size=2,xs =288,ys=512,s1=270,s2=480):
 
 
 
-
-
 if __name__ == '__main__':
     count = 0
-    for X,Y1,Y2 in data_generator(mode = 'train', ant_id = '101'):
+    for X,Y1,Y2 in framewise_data_generator(mode = 'train'):
         print (X.shape)
-        print (Y1.shape)
-        print (Y2.shape)
+        print (Y1)
+        print (np.mean(Y2))
         if count == 0:
             break
