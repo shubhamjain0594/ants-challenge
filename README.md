@@ -2,10 +2,16 @@
 
 Ants Challenge on Crowd.ai
 
+https://www.crowdai.org/challenges/ants-challenge-part-1#overview
+
 # Setup
 
-## Tensorflow
+## Torch
 
-export TF_BINARY_URL=https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow_gpu-0.12.0rc0-cp35-cp35m-linux_x86_64.whl
-pip3 install --ignore-installed --upgrade $TF_BINARY_URL
-conda install keras
+Total ants = 72
+
+## Idea
+
+1. Divide the image into patches of 96*96
+2. For each patch its class is denoted by the ant with 'X' mark nearest to the center of the patch and lies in the patch. If no ant then we say empty class.
+3. Train a VGG-16 over the patches. Resample the dataset so that the ratio of all samples from all classes is nearly equal. Take care of the samples from empty class specially

@@ -2,9 +2,9 @@ import glob
 import os
 import scipy.ndimage
 import numpy as np
-import csv,sys
+import csv
+import sys
 from generate_barcode import get_barcode
-
 
 DATA_PATH = '/data4/ants-challenge'
 train_valid_split = 0.8
@@ -14,6 +14,7 @@ ant_id_list = [101, 106, 109, 119, 128, 133, 135, 143, 15, 161, 166,
             298, 324, 331, 334, 33, 353, 36, 397, 428, 429, 42, 43, 448, 46, 494,
             532, 533, 538, 539, 561, 570, 571, 594, 598, 600, 630, 633, 637, 646, 657,
             671, 67, 698, 699, 727, 72, 756, 758, 763, 764, 76, 77, 790, 797, 818, 819]
+
 
 def load_csv(file_name):
     """
@@ -29,8 +30,8 @@ def load_csv(file_name):
     ant_dict = {}
     with infile as f:
         csvreader = csv.reader(f)
-        for c,lines in enumerate(csvreader):
-            if c==0:
+        for c, lines in enumerate(csvreader):
+            if c == 0:
                 continue
             ant_id = lines[0]
             if ant_id not in ant_dict:
@@ -44,14 +45,15 @@ def load_csv(file_name):
         return ant_dict
 
 
-def get_padded_barcode(ant_id,xs,ys):
+def get_padded_barcode(ant_id, xs, ys):
     barcode = get_barcode(ant_id)
-    img = np.zeros((xs,ys))
-    s1,s2 = barcode.shape
-    img[(xs-s1)/2:(xs+s1)/2,(ys-s2)/2:(ys+s2)/2] = barcode
+    img = np.zeros((xs, ys))
+    s1, s2 = barcode.shape
+    img[(xs-s1)/2:(xs+s1)/2, (ys-s2)/2:(ys+s2)/2] = barcode
     return img
 
-def data_generator(mode,ant_id,batch_size=2,xs =288,ys=512,s1=270,s2=480):
+
+def data_generator(mode, ant_id, batch_size=2, xs=288, ys=512, s1=270, s2=480):
     ant_dict = load_csv(os.path.join(DATA_PATH,'training_dataset.csv'))
     spc_ant_dict = ant_dict[ant_id]
 
@@ -123,8 +125,8 @@ def framewise_load_csv(file_name):
     frame_dict = {}
     with infile as f:
         csvreader = csv.reader(f)
-        for c,lines in enumerate(csvreader):
-            if c==0:
+        for c, lines in enumerate(csvreader):
+            if c == 0:
                 continue
             frame_id = '{:05d}'.format(int(lines[1]))
             if frame_id not in frame_dict:
@@ -136,8 +138,6 @@ def framewise_load_csv(file_name):
                 frame_dict[frame_id]['coordinates'].append([lines[2], lines[3]])
 
         return frame_dict
-
-
 
 
 def framewise_data_generator(mode,batch_size=2,xs =288,ys=512,s1=270,s2=480):
